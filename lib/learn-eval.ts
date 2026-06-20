@@ -93,7 +93,7 @@ async function readOptionalText(filePath: string, maxChars: number): Promise<str
 }
 
 async function loadExistingSkills(projectRoot: string): Promise<ExistingSkillSummary[]> {
-	const loaded = loadSkills({ cwd: projectRoot }).skills;
+	const loaded = loadSkills({ cwd: projectRoot, agentDir: getAgentDir(), skillPaths: [], includeDefaults: true }).skills;
 	const summaries: ExistingSkillSummary[] = [];
 	for (const skill of loaded) {
 		const raw = await readOptionalText(skill.filePath, 20000);
