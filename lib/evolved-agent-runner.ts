@@ -4,15 +4,9 @@ import type { Model, TextContent } from "@earendil-works/pi-ai";
 import {
 	buildSessionContext,
 	createAgentSession,
-	createBashTool,
-	createEditTool,
-	createFindTool,
-	createGrepTool,
-	createLsTool,
-	createReadTool,
-	createWriteTool,
 	DefaultResourceLoader,
 	type ExtensionContext,
+	getAgentDir,
 	type ModelRegistry,
 	parseFrontmatter,
 	SessionManager,
@@ -65,23 +59,16 @@ function flattenAssistantText(content: unknown): string {
 		.trim();
 }
 
-function resolveToolSet(cwd: string, tools?: string[]) {
-	const allTools = {
-		read: createReadTool(cwd),
-		bash: createBashTool(cwd),
-		edit: createEditTool(cwd),
-		write: createWriteTool(cwd),
-		grep: createGrepTool(cwd),
-		find: createFindTool(cwd),
-		ls: createLsTool(cwd),
-	};
+function resolveToolNames(tools?: string[]): string[] {
+	const allowedTools = new Set(["read", "bash", "edit", "write", "grep", "find", "ls"]);
+	const defaultTools = ["read", "bash", "edit", "write"];
 
 	if (!tools || tools.length === 0) {
-		return [allTools.read, allTools.bash, allTools.edit, allTools.write];
+		return defaultTools;
 	}
 
-	const selected = tools.map((tool) => allTools[tool as keyof typeof allTools]).filter(Boolean);
-	return selected.length > 0 ? selected : [allTools.read, allTools.bash, allTools.edit, allTools.write];
+	const selected = tools.filter((tool) => allowedTools.has(tool));
+	return selected.length > 0 ? selected : defaultTools;
 }
 
 function buildManualAgentSystemPrompt(agent: ResolvedEvolvedAgent): string {
@@ -178,8 +165,10 @@ export async function runEvolvedAgent(options: {
 	const preferredModel = options.modelOverride ?? agent.preferredModel;
 	const model = parsePreferredModel(preferredModel, options.ctx.modelRegistry, fallbackModel);
 
+	const agentDir = getAgentDir();
 	const resourceLoader = new DefaultResourceLoader({
 		cwd: options.ctx.cwd,
+		agentDir,
 		noExtensions: true,
 		noSkills: true,
 		noPromptTemplates: true,
@@ -191,11 +180,12 @@ export async function runEvolvedAgent(options: {
 
 	const { session } = await createAgentSession({
 		cwd: options.ctx.cwd,
+		agentDir,
 		model,
 		modelRegistry: options.ctx.modelRegistry,
 		resourceLoader,
 		sessionManager: SessionManager.inMemory(options.ctx.cwd),
-		tools: resolveToolSet(options.ctx.cwd, agent.tools),
+		tools: resolveToolNames(agent.tools),
 	});
 
 	try {
