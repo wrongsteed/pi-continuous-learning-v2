@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { complete, type Model, type UserMessage } from "@earendil-works/pi-ai";
@@ -10,7 +11,7 @@ import {
 	serializeConversation,
 } from "@earendil-works/pi-coding-agent";
 import { detectOverlappingSkills, type ExistingSkillReference } from "./skill-overlap.js";
-import { writeTextFile } from "./storage.js";
+import { fileExists, writeTextFile } from "./storage.js";
 import type { InstinctScope, ProjectInfo, SkillCreateQualityReport } from "./types.js";
 
 const LEARN_EVAL_SYSTEM_PROMPT = `You extract one reusable pattern from a coding-agent session and evaluate whether it should be saved.
@@ -81,6 +82,12 @@ export interface LearnEvalResult {
 	targetPath: string | null;
 	projectRoot: string;
 	transcript: string;
+}
+
+export interface LearnEvalApplyResult {
+	status: "applied" | "skipped-existing" | "skipped-missing-target" | "skipped-no-content";
+	path?: string;
+	message: string;
 }
 
 async function readOptionalText(filePath: string, maxChars: number): Promise<string> {
@@ -218,6 +225,81 @@ function buildAbsorbContent(skillMarkdown: string, absorbTarget: string | undefi
 
 function stripFrontmatter(skillMarkdown: string): string {
 	return skillMarkdown.replace(/^---[\s\S]*?---\s*/u, "").trim();
+}
+
+function normalizeForDuplicate(text: string): string {
+	return text
+		.replace(/<!--[^]*?-->/gu, " ")
+		.replace(/^extracted date:.*$/gimu, " ")
+		.replace(/^suggested additions for .*$/gimu, " ")
+		.replace(/```[^]*?```/gu, (block) => block.replace(/```[a-z0-9_-]*|```/giu, " "))
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/gu, " ")
+		.replace(/\s+/gu, " ")
+		.trim();
+}
+
+function learnEvalFingerprint(text: string): string {
+	const normalized = normalizeForDuplicate(text);
+	return createHash("sha256").update(normalized).digest("hex").slice(0, 16);
+}
+
+function significantDuplicateLines(text: string): string[] {
+	const seen = new Set<string>();
+	const lines: string[] = [];
+	for (const rawLine of stripFrontmatter(text).split(/\r?\n/u)) {
+		const trimmed = rawLine.trim();
+		if (!trimmed || trimmed.startsWith("```") || /^#+\s/u.test(trimmed) || /^extracted date:/iu.test(trimmed)) {
+			continue;
+		}
+		const normalized = normalizeForDuplicate(trimmed);
+		if (normalized.length < 48 || seen.has(normalized)) {
+			continue;
+		}
+		seen.add(normalized);
+		lines.push(normalized);
+		if (lines.length >= 40) break;
+	}
+	return lines;
+}
+
+function isLikelyDuplicateAddition(existing: string, addition: string): boolean {
+	const existingNorm = normalizeForDuplicate(existing);
+	const additionNorm = normalizeForDuplicate(addition);
+	if (!additionNorm) return true;
+	if (additionNorm.length >= 120 && existingNorm.includes(additionNorm)) return true;
+
+	const lines = significantDuplicateLines(addition);
+	if (lines.length === 0) return false;
+	const matches = lines.filter((line) => existingNorm.includes(line)).length;
+	return matches >= Math.max(3, Math.ceil(lines.length * 0.45));
+}
+
+async function appendLearnedAddition(
+	targetPath: string,
+	addition: string,
+	heading: string,
+): Promise<LearnEvalApplyResult> {
+	const trimmedAddition = addition.trim();
+	if (!trimmedAddition) {
+		return { status: "skipped-no-content", path: targetPath, message: "No learned content to apply." };
+	}
+
+	const existing = await readOptionalText(targetPath, 1_000_000);
+	const fingerprint = learnEvalFingerprint(trimmedAddition);
+	const marker = `<!-- continuous-learning:learn-eval:${fingerprint} -->`;
+	if (existing.includes(marker) || isLikelyDuplicateAddition(existing, trimmedAddition)) {
+		return {
+			status: "skipped-existing",
+			path: targetPath,
+			message: "Skipped: this learned pattern already appears to be present in the target.",
+		};
+	}
+
+	const block = `${marker}\n\n${heading}\n\n${trimmedAddition}`;
+	const next = existing.trim().length > 0 ? `${existing.trimEnd()}\n\n${block}\n` : `${block}\n`;
+	await writeTextFile(targetPath, next);
+	return { status: "applied", path: targetPath, message: `Applied learned addition to ${targetPath}.` };
 }
 
 async function resolveAbsorbTargetPath(result: LearnEvalResult): Promise<string | null> {
@@ -427,23 +509,36 @@ export async function evaluateSessionLearning(options: LearnEvalOptions): Promis
 	};
 }
 
-export async function applyLearnEvalResult(result: LearnEvalResult): Promise<void> {
+export async function applyLearnEvalResult(result: LearnEvalResult): Promise<LearnEvalApplyResult> {
 	if (result.quality.verdict === "absorb") {
 		const absorbPath = await resolveAbsorbTargetPath(result);
-		if (absorbPath && result.skillMarkdown) {
-			const existing = await readOptionalText(absorbPath, 1_000_000);
-			const addition = stripFrontmatter(result.skillMarkdown);
-			const heading = absorbPath.endsWith("MEMORY.md") ? "## Learned Pattern" : "## Learned Addition";
-			const next =
-				existing.trim().length > 0
-					? `${existing.trimEnd()}\n\n${heading}\n\n${addition}\n`
-					: `${heading}\n\n${addition}\n`;
-			await writeTextFile(absorbPath, next);
+		if (!absorbPath) {
+			return { status: "skipped-missing-target", message: "No absorb target was resolved." };
 		}
-		return;
+		if (!result.skillMarkdown) {
+			return { status: "skipped-no-content", path: absorbPath, message: "No learned content to absorb." };
+		}
+		const addition = stripFrontmatter(result.skillMarkdown);
+		const heading = absorbPath.endsWith("MEMORY.md") ? "## Learned Pattern" : "## Learned Addition";
+		return appendLearnedAddition(absorbPath, addition, heading);
 	}
+
 	if (!result.skillMarkdown || !result.targetPath) {
-		return;
+		return { status: "skipped-missing-target", message: "No save target was resolved." };
 	}
+
+	if (await fileExists(result.targetPath)) {
+		const existing = await readOptionalText(result.targetPath, 1_000_000);
+		if (isLikelyDuplicateAddition(existing, result.skillMarkdown)) {
+			return {
+				status: "skipped-existing",
+				path: result.targetPath,
+				message: "Skipped: the target skill already contains this learned pattern.",
+			};
+		}
+		return appendLearnedAddition(result.targetPath, stripFrontmatter(result.skillMarkdown), "## Learned Addition");
+	}
+
 	await writeTextFile(result.targetPath, result.skillMarkdown);
+	return { status: "applied", path: result.targetPath, message: `Saved learned skill to ${result.targetPath}.` };
 }

@@ -131,15 +131,21 @@ function buildLearnEvalTarget(details: {
 }
 
 function buildLearnEvalSummary(details: LearnEvalMessageDetails): string {
-	const status = details.awaitingConfirmation ? "awaiting-confirmation" : details.applied ? "applied" : "not-applied";
-	return [
+	const status = details.awaitingConfirmation
+		? "awaiting-confirmation"
+		: (details.applyStatus ?? (details.applied ? "applied" : "not-applied"));
+	const lines = [
 		`LEARN EVAL - ${details.projectLabel}`,
 		`Verdict: ${details.verdict}`,
 		`Scope: ${details.scope}`,
 		`Target: ${details.target}`,
 		`Status: ${status}`,
 		`Rationale: ${details.rationale}`,
-	].join("\n");
+	];
+	if (details.applyMessage) {
+		lines.push(`Apply: ${details.applyMessage}`);
+	}
+	return lines.join("\n");
 }
 
 function emitLearnEvalReport(pi: ExtensionAPI, details: LearnEvalMessageDetails): void {
@@ -859,6 +865,8 @@ export function registerContinuousLearningCommands(
 				}
 
 				let applied = false;
+				let applyStatus: LearnEvalMessageDetails["applyStatus"] = "not-applied";
+				let applyMessage: string | undefined;
 				if (result.quality.verdict !== "drop") {
 					if (needsConfirmation) {
 						const confirmed = await ctx.ui.confirm(
@@ -866,12 +874,16 @@ export function registerContinuousLearningCommands(
 							buildLearnEvalConfirmBody(baseDetails),
 						);
 						if (confirmed) {
-							await applyLearnEvalResult(result);
-							applied = true;
+							const applyResult = await applyLearnEvalResult(result);
+							applyStatus = applyResult.status;
+							applyMessage = applyResult.message;
+							applied = applyResult.status === "applied";
 						}
 					} else if (applyRequested) {
-						await applyLearnEvalResult(result);
-						applied = true;
+						const applyResult = await applyLearnEvalResult(result);
+						applyStatus = applyResult.status;
+						applyMessage = applyResult.message;
+						applied = applyResult.status === "applied";
 					}
 				}
 
@@ -881,6 +893,8 @@ export function registerContinuousLearningCommands(
 				emitLearnEvalReport(pi, {
 					...baseDetails,
 					applied,
+					applyStatus,
+					applyMessage,
 				});
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
