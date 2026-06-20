@@ -154,6 +154,7 @@ export interface SkillCreateMessageDetails {
 }
 
 export type LearnEvalApplyStatus =
+	| "running"
 	| "applied"
 	| "not-applied"
 	| "skipped-existing"
@@ -170,6 +171,7 @@ export interface LearnEvalMessageDetails {
 	awaitingConfirmation: boolean;
 	applyStatus?: LearnEvalApplyStatus;
 	applyMessage?: string;
+	phase?: string;
 	rationale: string;
 	checklist: string[];
 	improvements?: string[];

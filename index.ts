@@ -192,17 +192,23 @@ export default function continuousLearningV2(pi: ExtensionAPI) {
 			const rawStatus = details.awaitingConfirmation
 				? "awaiting-confirmation"
 				: (details.applyStatus ?? (details.applied ? "applied" : "not-applied"));
-			const status = details.awaitingConfirmation
-				? theme.fg("warning", rawStatus)
-				: details.applied
-					? theme.fg("success", rawStatus)
-					: rawStatus.startsWith("skipped")
+			const status =
+				rawStatus === "running"
+					? theme.fg("accent", rawStatus)
+					: details.awaitingConfirmation
 						? theme.fg("warning", rawStatus)
-						: theme.fg("muted", rawStatus);
-			lines.push(`${theme.fg("muted", "Verdict:")} ${details.verdict}`);
+						: details.applied
+							? theme.fg("success", rawStatus)
+							: rawStatus.startsWith("skipped")
+								? theme.fg("warning", rawStatus)
+								: theme.fg("muted", rawStatus);
+			lines.push(`${theme.fg("muted", "Verdict:")} ${rawStatus === "running" ? "(pending)" : details.verdict}`);
 			lines.push(`${theme.fg("muted", "Scope:")} ${details.scope}`);
 			lines.push(`${theme.fg("muted", "Target:")} ${details.target}`);
 			lines.push(`${theme.fg("muted", "Status:")} ${status}`);
+			if (details.phase) {
+				lines.push(`${theme.fg("muted", "Phase:")} ${details.phase}`);
+			}
 			if (details.applyMessage) {
 				lines.push(`${theme.fg("muted", "Apply:")} ${details.applyMessage}`);
 			}
