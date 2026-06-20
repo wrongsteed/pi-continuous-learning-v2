@@ -153,6 +153,13 @@ export interface SkillCreateMessageDetails {
 	quality: SkillCreateQualityReport;
 }
 
+export type LearnEvalApplyStatus =
+	| "applied"
+	| "not-applied"
+	| "skipped-existing"
+	| "skipped-missing-target"
+	| "skipped-no-content";
+
 export interface LearnEvalMessageDetails {
 	projectLabel: string;
 	verdict: SkillCreateQualityReport["verdict"];
@@ -161,6 +168,8 @@ export interface LearnEvalMessageDetails {
 	targetPath: string | null;
 	applied: boolean;
 	awaitingConfirmation: boolean;
+	applyStatus?: LearnEvalApplyStatus;
+	applyMessage?: string;
 	rationale: string;
 	checklist: string[];
 	improvements?: string[];

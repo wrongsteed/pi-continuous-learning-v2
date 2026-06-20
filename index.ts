@@ -189,15 +189,23 @@ export default function continuousLearningV2(pi: ExtensionAPI) {
 		lines.push("");
 
 		if (details) {
+			const rawStatus = details.awaitingConfirmation
+				? "awaiting-confirmation"
+				: (details.applyStatus ?? (details.applied ? "applied" : "not-applied"));
 			const status = details.awaitingConfirmation
-				? theme.fg("warning", "awaiting-confirmation")
+				? theme.fg("warning", rawStatus)
 				: details.applied
-					? theme.fg("success", "applied")
-					: theme.fg("muted", "not-applied");
+					? theme.fg("success", rawStatus)
+					: rawStatus.startsWith("skipped")
+						? theme.fg("warning", rawStatus)
+						: theme.fg("muted", rawStatus);
 			lines.push(`${theme.fg("muted", "Verdict:")} ${details.verdict}`);
 			lines.push(`${theme.fg("muted", "Scope:")} ${details.scope}`);
 			lines.push(`${theme.fg("muted", "Target:")} ${details.target}`);
 			lines.push(`${theme.fg("muted", "Status:")} ${status}`);
+			if (details.applyMessage) {
+				lines.push(`${theme.fg("muted", "Apply:")} ${details.applyMessage}`);
+			}
 			lines.push("");
 			lines.push(theme.bold("Checklist"));
 			for (const item of details.checklist) {
