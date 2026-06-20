@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -61,7 +61,7 @@ function assertValidation(condition: boolean, message: string): void {
 }
 
 export async function runScopeValidation(): Promise<ScopeValidationResult> {
-	const tempRoot = await mkdtemp(join(tmpdir(), "pi-clv2-scope-"));
+	const tempRoot = await realpath(await mkdtemp(join(tmpdir(), "pi-clv2-scope-")));
 	const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
 	const previousProjectDir = process.env.PI_PROJECT_DIR;
 	const previousClaudeProjectDir = process.env.CLAUDE_PROJECT_DIR;
