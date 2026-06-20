@@ -32,15 +32,6 @@
         "../../../../../packages/tui/src/index.ts",
         "./node_modules/@earendil-works/pi-tui/dist/index.js",
         "../../../../../node_modules/@earendil-works/pi-tui/dist/index.js"
-      ],
-      "@mariozechner/pi-mom": [
-        "../../../../../packages/mom/src/index.ts"
-      ],
-      "@mariozechner/pi": [
-        "../../../../../packages/pods/src/index.ts"
-      ],
-      "@mariozechner/pi-web-ui": [
-        "../../../../../packages/web-ui/src/index.ts"
       ]
     }
   },

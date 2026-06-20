@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { statSync } from "node:fs";
+import { realpathSync, statSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { ProjectInfo } from "./types.js";
@@ -27,11 +27,24 @@ function stripRemoteCredentials(remote: string | undefined): string | undefined 
 	return remote.replace(/:\/\/[^@]+@/u, "://");
 }
 
-function isExistingDirectory(path: string): boolean {
+function canonicalizePath(path: string): string {
+	const resolved = resolve(path);
 	try {
-		return statSync(path).isDirectory();
+		return realpathSync.native(resolved);
 	} catch {
-		return false;
+		return resolved;
+	}
+}
+
+function resolveExistingDirectory(path: string): string | undefined {
+	const resolved = resolve(path);
+	try {
+		if (!statSync(resolved).isDirectory()) {
+			return undefined;
+		}
+		return canonicalizePath(resolved);
+	} catch {
+		return undefined;
 	}
 }
 
@@ -41,8 +54,8 @@ function resolveProjectRootOverride(cwd: string): string | undefined {
 		.filter((value): value is string => Boolean(value));
 	for (const candidate of candidates) {
 		if (candidate.length > 0) {
-			const resolved = resolve(cwd, candidate);
-			if (isExistingDirectory(resolved)) {
+			const resolved = resolveExistingDirectory(resolve(cwd, candidate));
+			if (resolved) {
 				return resolved;
 			}
 		}
@@ -51,7 +64,7 @@ function resolveProjectRootOverride(cwd: string): string | undefined {
 }
 
 export async function detectProject(cwd: string): Promise<ProjectInfo> {
-	const resolvedCwd = resolve(cwd);
+	const resolvedCwd = canonicalizePath(cwd);
 	const overrideRoot = resolveProjectRootOverride(resolvedCwd);
 	const gitRoot = overrideRoot ?? (await runGit(["-C", resolvedCwd, "rev-parse", "--show-toplevel"]));
 	if (!gitRoot) {
@@ -61,14 +74,15 @@ export async function detectProject(cwd: string): Promise<ProjectInfo> {
 			root: resolvedCwd,
 		};
 	}
-	const remote = stripRemoteCredentials(await runGit(["-C", gitRoot, "remote", "get-url", "origin"]));
-	const projectHashSource = remote ?? gitRoot;
+	const projectRoot = canonicalizePath(gitRoot);
+	const remote = stripRemoteCredentials(await runGit(["-C", projectRoot, "remote", "get-url", "origin"]));
+	const projectHashSource = remote ?? projectRoot;
 	const id = createHash("sha256").update(projectHashSource).digest("hex").slice(0, 12);
-	const name = basename(gitRoot) || "project";
+	const name = basename(projectRoot) || "project";
 	return {
 		id,
 		name,
-		root: gitRoot,
+		root: projectRoot,
 		remote,
 	};
 }

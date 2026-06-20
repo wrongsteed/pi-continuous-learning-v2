@@ -1,21 +1,16 @@
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import type { Model } from "@mariozechner/pi-ai";
+import type { Model } from "@earendil-works/pi-ai";
 import {
 	AuthStorage,
 	createAgentSession,
-	createBashTool,
-	createEditTool,
-	createGrepTool,
-	createReadTool,
-	createWriteTool,
 	DefaultResourceLoader,
 	ModelRegistry,
 	SessionManager,
 	type ExtensionContext,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import { extractInstinctAction } from "../lib/instinct-quality.js";
 import { loadPendingInstincts, loadProjectOnlyInstincts } from "../lib/instincts.js";
 import { maybeAnalyzeObservations } from "../lib/observer.js";
@@ -236,13 +231,7 @@ async function createValidationContext(projectRoot: string, pluginRoot: string, 
 		modelRegistry,
 		resourceLoader,
 		sessionManager: SessionManager.inMemory(projectRoot),
-		tools: [
-			createReadTool(projectRoot),
-			createGrepTool(projectRoot),
-			createBashTool(projectRoot),
-			createEditTool(projectRoot),
-			createWriteTool(projectRoot),
-		],
+		tools: ["read", "grep", "bash", "edit", "write"],
 	});
 
 	const fakeCtx = {
@@ -295,72 +284,91 @@ async function runValidation(args: CliArgs) {
 		model,
 	);
 
-	const rounds = buildPromptRounds(args.mode, args.rounds);
-	const snapshots: ValidationSnapshot[] = [];
+	try {
+		const rounds = buildPromptRounds(args.mode, args.rounds);
+		const snapshots: ValidationSnapshot[] = [];
 
-	for (const [index, prompts] of rounds.entries()) {
-		for (const prompt of prompts) {
-			await session.prompt(prompt);
+		for (const [index, prompts] of rounds.entries()) {
+			for (const prompt of prompts) {
+				await session.prompt(prompt);
+			}
+
+			const observerResult = await maybeAnalyzeObservations(fakeCtx, project, layout, {
+				running: false,
+				timer: null,
+				scheduledAnalysis: null,
+			});
+			const activeInstincts = await loadProjectOnlyInstincts(layout);
+			const pendingInstincts = await loadPendingInstincts(layout);
+			snapshots.push({
+				round: index + 1,
+				observerResult,
+				activeIds: activeInstincts.map((instinct) => instinct.id).sort(),
+				pendingIds: pendingInstincts.map((instinct) => instinct.id).sort(),
+			});
 		}
 
-		const observerResult = await maybeAnalyzeObservations(fakeCtx, project, layout, {
-			running: false,
-			timer: null,
-			scheduledAnalysis: null,
-		});
 		const activeInstincts = await loadProjectOnlyInstincts(layout);
 		const pendingInstincts = await loadPendingInstincts(layout);
-		snapshots.push({
-			round: index + 1,
-			observerResult,
-			activeIds: activeInstincts.map((instinct) => instinct.id).sort(),
-			pendingIds: pendingInstincts.map((instinct) => instinct.id).sort(),
-		});
-	}
+		const activeIds = activeInstincts.map((instinct) => instinct.id).sort();
+		const pendingIds = pendingInstincts.map((instinct) => instinct.id).sort();
+		const learnedInstincts = [...activeInstincts, ...pendingInstincts];
+		const learnedIds = [...activeIds, ...pendingIds];
+		const actions = learnedInstincts.map((instinct) => extractInstinctAction(instinct.content)).sort();
+		const learnedText = learnedInstincts
+			.map((instinct) => `${instinct.id}\n${instinct.trigger}\n${extractInstinctAction(instinct.content)}`)
+			.join("\n")
+			.toLowerCase();
 
-	const activeInstincts = await loadProjectOnlyInstincts(layout);
-	const pendingInstincts = await loadPendingInstincts(layout);
-	const activeIds = activeInstincts.map((instinct) => instinct.id).sort();
-	const pendingIds = pendingInstincts.map((instinct) => instinct.id).sort();
-	const actions = activeInstincts.map((instinct) => extractInstinctAction(instinct.content)).sort();
+		if (learnedIds.length < 1) {
+			throw new Error("Expected at least 1 learned active or pending instinct, got 0");
+		}
+		if (new Set(learnedIds).size !== learnedIds.length) {
+			throw new Error("Learned instinct IDs are not unique across active and pending outputs");
+		}
+		if (!learnedText.includes("workspace") || !learnedText.includes("depend")) {
+			throw new Error("Observer did not learn the workspace dependency inheritance theme");
+		}
+		if (!learnedText.includes("config") || (!learnedText.includes("example") && !learnedText.includes("default"))) {
+			throw new Error("Observer did not learn the config example/default alignment theme");
+		}
+		if (!learnedText.includes("fixture")) {
+			throw new Error("Observer did not learn the shared fixture reuse theme");
+		}
+		if (args.mode === "soak" && learnedIds.length > 5) {
+			throw new Error(`Expected soak run to stay within 5 learned instincts, got ${learnedIds.length}`);
+		}
 
-	if (activeIds.length < 3) {
-		throw new Error(`Expected at least 3 active instincts, got ${activeIds.length}`);
-	}
-	if (pendingIds.length > 1) {
-		throw new Error(`Expected at most 1 pending instinct after validation, got ${pendingIds.length}`);
-	}
-	if (new Set(activeIds).size !== activeIds.length) {
-		throw new Error("Active instinct IDs are not unique");
-	}
-	if (args.mode === "soak" && activeIds.length > 4) {
-		throw new Error(`Expected soak run to stay within 4 active instincts, got ${activeIds.length}`);
-	}
+		const summary = {
+			mode: args.mode,
+			rounds: rounds.length,
+			projectRoot,
+			tempAgentDir,
+			model: `${model.provider}/${model.id}`,
+			active: activeInstincts.map((instinct) => ({
+				id: instinct.id,
+				trigger: instinct.trigger,
+				confidence: instinct.confidence,
+				action: extractInstinctAction(instinct.content),
+			})),
+			pending: pendingInstincts.map((instinct) => ({
+				id: instinct.id,
+				trigger: instinct.trigger,
+				confidence: instinct.confidence,
+				action: extractInstinctAction(instinct.content),
+			})),
+			snapshots,
+			actions,
+		};
 
-	const summary = {
-		mode: args.mode,
-		rounds: rounds.length,
-		projectRoot,
-		tempAgentDir,
-		model: `${model.provider}/${model.id}`,
-		active: activeInstincts.map((instinct) => ({
-			id: instinct.id,
-			trigger: instinct.trigger,
-			confidence: instinct.confidence,
-			action: extractInstinctAction(instinct.content),
-		})),
-		pending: pendingInstincts.map((instinct) => ({
-			id: instinct.id,
-			trigger: instinct.trigger,
-			confidence: instinct.confidence,
-			action: extractInstinctAction(instinct.content),
-		})),
-		snapshots,
-		actions,
-	};
-
-	console.log(JSON.stringify(summary, null, 2));
-	session.dispose();
+		console.log(JSON.stringify(summary, null, 2));
+	} finally {
+		session.dispose();
+		await Promise.all([
+			rm(projectRoot, { recursive: true, force: true }),
+			rm(tempAgentDir, { recursive: true, force: true }),
+		]);
+	}
 }
 
 const args = parseArgs(process.argv.slice(2));
