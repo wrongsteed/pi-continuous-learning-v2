@@ -3,35 +3,35 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@mariozechner/pi-ai": [
+      "@earendil-works/pi-ai": [
         "../../../../../packages/ai/src/index.ts",
-        "./node_modules/@mariozechner/pi-ai/dist/index.js",
-        "../../../../../node_modules/@mariozechner/pi-ai/dist/index.js"
+        "./node_modules/@earendil-works/pi-ai/dist/index.js",
+        "../../../../../node_modules/@earendil-works/pi-ai/dist/index.js"
       ],
-      "@mariozechner/pi-ai/oauth": [
+      "@earendil-works/pi-ai/oauth": [
         "../../../../../packages/ai/src/oauth.ts",
-        "./node_modules/@mariozechner/pi-ai/dist/oauth.js",
-        "../../../../../node_modules/@mariozechner/pi-ai/dist/oauth.js"
+        "./node_modules/@earendil-works/pi-ai/dist/oauth.js",
+        "../../../../../node_modules/@earendil-works/pi-ai/dist/oauth.js"
       ],
-      "@mariozechner/pi-agent-core": [
+      "@earendil-works/pi-agent-core": [
         "../../../../../packages/agent/src/index.ts",
-        "./node_modules/@mariozechner/pi-agent-core/dist/index.js",
-        "../../../../../node_modules/@mariozechner/pi-agent-core/dist/index.js"
+        "./node_modules/@earendil-works/pi-agent-core/dist/index.js",
+        "../../../../../node_modules/@earendil-works/pi-agent-core/dist/index.js"
       ],
-      "@mariozechner/pi-coding-agent": [
+      "@earendil-works/pi-coding-agent": [
         "../../../../../packages/coding-agent/src/index.ts",
-        "./node_modules/@mariozechner/pi-coding-agent/dist/index.js",
-        "../../../../../node_modules/@mariozechner/pi-coding-agent/dist/index.js"
+        "./node_modules/@earendil-works/pi-coding-agent/dist/index.js",
+        "../../../../../node_modules/@earendil-works/pi-coding-agent/dist/index.js"
       ],
-      "@mariozechner/pi-coding-agent/hooks": [
+      "@earendil-works/pi-coding-agent/hooks": [
         "../../../../../packages/coding-agent/src/core/hooks/index.ts",
-        "./node_modules/@mariozechner/pi-coding-agent/dist/core/hooks/index.js",
-        "../../../../../node_modules/@mariozechner/pi-coding-agent/dist/core/hooks/index.js"
+        "./node_modules/@earendil-works/pi-coding-agent/dist/core/hooks/index.js",
+        "../../../../../node_modules/@earendil-works/pi-coding-agent/dist/core/hooks/index.js"
       ],
-      "@mariozechner/pi-tui": [
+      "@earendil-works/pi-tui": [
         "../../../../../packages/tui/src/index.ts",
-        "./node_modules/@mariozechner/pi-tui/dist/index.js",
-        "../../../../../node_modules/@mariozechner/pi-tui/dist/index.js"
+        "./node_modules/@earendil-works/pi-tui/dist/index.js",
+        "../../../../../node_modules/@earendil-works/pi-tui/dist/index.js"
       ],
       "@mariozechner/pi-mom": [
         "../../../../../packages/mom/src/index.ts"

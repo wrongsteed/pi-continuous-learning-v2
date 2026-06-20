@@ -1,7 +1,7 @@
-import type { TextContent } from "@mariozechner/pi-ai";
-import type { ExtensionAPI, ExtensionContext, ToolResultEvent } from "@mariozechner/pi-coding-agent";
-import { isReadToolResult } from "@mariozechner/pi-coding-agent";
-import { Box, Text } from "@mariozechner/pi-tui";
+import type { TextContent } from "@earendil-works/pi-ai";
+import type { ExtensionAPI, ExtensionContext, ToolResultEvent } from "@earendil-works/pi-coding-agent";
+import { isReadToolResult } from "@earendil-works/pi-coding-agent";
+import { Box, Text } from "@earendil-works/pi-tui";
 import { registerContinuousLearningCommands } from "./lib/commands.js";
 import { loadMergedInstincts } from "./lib/instincts.js";
 import { maybeAnalyzeObservations, type ObserverRuntimeState } from "./lib/observer.js";

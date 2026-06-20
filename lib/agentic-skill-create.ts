@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { promisify } from "node:util";
-import type { Model } from "@mariozechner/pi-ai";
+import type { Model } from "@earendil-works/pi-ai";
 import {
 	convertToLlm,
 	createAgentSession,
@@ -12,7 +12,7 @@ import {
 	SessionManager,
 	serializeConversation,
 	type ToolDefinition,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import type { ProjectInfo, StorageLayout } from "./types.js";
 

@@ -1,6 +1,6 @@
 import { readdir, readFile, stat, unlink } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
-import { parseFrontmatter } from "@mariozechner/pi-coding-agent";
+import { parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { extractInstinctAction, normalizeTriggerClusterKey, renderWhenClause } from "./instinct-quality.js";
 import { fileExists, isDirectory, loadProjectRegistry, writeTextFile } from "./storage.js";
 import type {

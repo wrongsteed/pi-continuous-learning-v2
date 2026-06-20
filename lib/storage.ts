@@ -1,6 +1,6 @@
 import { cp, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { getAgentDir, withFileMutationQueue } from "@mariozechner/pi-coding-agent";
+import { getAgentDir, withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import type { ContinuousLearningConfig, ObservationEntry, ObserverState, ProjectInfo, StorageLayout } from "./types.js";
 import { DEFAULT_CONFIG } from "./types.js";
 

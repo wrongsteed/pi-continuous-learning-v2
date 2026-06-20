@@ -1,5 +1,5 @@
-import { complete, type UserMessage } from "@mariozechner/pi-ai";
-import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { complete, type UserMessage } from "@earendil-works/pi-ai";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { dedupeComparableInstincts, extractInstinctAction } from "./instinct-quality.js";
 import {
 	loadMergedInstincts,

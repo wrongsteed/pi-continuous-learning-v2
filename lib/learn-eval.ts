@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { complete, type Model, type UserMessage } from "@mariozechner/pi-ai";
+import { complete, type Model, type UserMessage } from "@earendil-works/pi-ai";
 import {
 	buildSessionContext,
 	convertToLlm,
@@ -8,7 +8,7 @@ import {
 	loadSkills,
 	parseFrontmatter,
 	serializeConversation,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import { detectOverlappingSkills, type ExistingSkillReference } from "./skill-overlap.js";
 import { writeTextFile } from "./storage.js";
 import type { InstinctScope, ProjectInfo, SkillCreateQualityReport } from "./types.js";

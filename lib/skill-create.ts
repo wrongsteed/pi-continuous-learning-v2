@@ -2,8 +2,8 @@ import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
 import { promisify } from "node:util";
-import { complete, type Model, type UserMessage } from "@mariozechner/pi-ai";
-import { getAgentDir, loadSkills, type ModelRegistry, parseFrontmatter } from "@mariozechner/pi-coding-agent";
+import { complete, type Model, type UserMessage } from "@earendil-works/pi-ai";
+import { getAgentDir, loadSkills, type ModelRegistry, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { runAgenticSkillCreate } from "./agentic-skill-create.js";
 import {
 	dedupeComparableInstincts,

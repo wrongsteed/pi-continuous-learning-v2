@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
-import type { Model, TextContent } from "@mariozechner/pi-ai";
+import type { Model, TextContent } from "@earendil-works/pi-ai";
 import {
 	buildSessionContext,
 	createAgentSession,
@@ -16,7 +16,7 @@ import {
 	type ModelRegistry,
 	parseFrontmatter,
 	SessionManager,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import type { ProjectInfo, StorageLayout } from "./types.js";
 
 export interface ResolvedEvolvedAgent {
