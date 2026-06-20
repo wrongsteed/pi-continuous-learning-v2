@@ -1,6 +1,6 @@
 import { readdir, readFile, rm } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { runEvolvedAgent } from "./evolved-agent-runner.js";
 import {
 	analyzeEvolution,
@@ -136,12 +136,15 @@ function buildLearnEvalSummary(details: LearnEvalMessageDetails): string {
 		: (details.applyStatus ?? (details.applied ? "applied" : "not-applied"));
 	const lines = [
 		`LEARN EVAL - ${details.projectLabel}`,
-		`Verdict: ${details.verdict}`,
+		`Verdict: ${status === "running" ? "(pending)" : details.verdict}`,
 		`Scope: ${details.scope}`,
 		`Target: ${details.target}`,
 		`Status: ${status}`,
-		`Rationale: ${details.rationale}`,
 	];
+	if (details.phase) {
+		lines.push(`Phase: ${details.phase}`);
+	}
+	lines.push(`Rationale: ${details.rationale}`);
 	if (details.applyMessage) {
 		lines.push(`Apply: ${details.applyMessage}`);
 	}
@@ -155,6 +158,31 @@ function emitLearnEvalReport(pi: ExtensionAPI, details: LearnEvalMessageDetails)
 		display: true,
 		details,
 	});
+}
+
+function setLearnEvalProgress(ctx: ExtensionCommandContext, phase: string | undefined): void {
+	if (!ctx.hasUI) {
+		return;
+	}
+	if (!phase) {
+		ctx.ui.setStatus("continuous-learning", undefined);
+		ctx.ui.setWidget("continuous-learning-progress", undefined);
+		ctx.ui.setWorkingMessage();
+		ctx.ui.setWorkingIndicator();
+		return;
+	}
+	const label = `learn-eval: ${phase}`;
+	ctx.ui.setStatus("continuous-learning", ctx.ui.theme.fg("accent", label));
+	ctx.ui.setWidget(
+		"continuous-learning-progress",
+		[
+			ctx.ui.theme.fg("accent", "CLv2 learn-eval running"),
+			ctx.ui.theme.fg("muted", `Phase: ${phase}`),
+		],
+		{ placement: "aboveEditor" },
+	);
+	ctx.ui.setWorkingMessage(label);
+	ctx.ui.setWorkingIndicator({ frames: ["-", "\\", "|", "/"], intervalMs: 120 });
 }
 
 function buildLearnEvalConfirmTitle(verdict: LearnEvalMessageDetails["verdict"]): string {
@@ -811,21 +839,43 @@ export function registerContinuousLearningCommands(
 				return;
 			}
 
+			const projectLabel = currentProjectLabel(project);
+			const emitRunning = (phase: string) => {
+				setLearnEvalProgress(ctx, phase);
+				emitLearnEvalReport(pi, {
+					projectLabel,
+					verdict: "drop",
+					scope: project.id === "global" ? "global" : "project",
+					target: "(pending)",
+					targetPath: null,
+					applied: false,
+					awaitingConfirmation: false,
+					applyStatus: "running",
+					phase,
+					rationale: "learn-eval is still running.",
+					checklist: [],
+				});
+			};
+
 			const parsed = parseArgs(args);
 			const applyRequested = parsed.flags.has("apply") || parsed.flags.has("force");
-			const resolvedModel = await resolveActiveOrDefaultModel(ctx.model, ctx.modelRegistry);
-			const model = resolvedModel.model;
-			if (!model) {
-				ctx.ui.notify("没有可用模型，无法执行 learn-eval", "warning");
-				return;
-			}
-			const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-			if (!auth.ok || !auth.apiKey) {
-				ctx.ui.notify(auth.ok ? "缺少模型 API key" : auth.error, "warning");
-				return;
-			}
-
 			try {
+				emitRunning("resolving model");
+				const resolvedModel = await resolveActiveOrDefaultModel(ctx.model, ctx.modelRegistry);
+				const model = resolvedModel.model;
+				if (!model) {
+					setLearnEvalProgress(ctx, undefined);
+					ctx.ui.notify("没有可用模型，无法执行 learn-eval", "warning");
+					return;
+				}
+				const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+				if (!auth.ok || !auth.apiKey) {
+					setLearnEvalProgress(ctx, undefined);
+					ctx.ui.notify(auth.ok ? "缺少模型 API key" : auth.error, "warning");
+					return;
+				}
+
+				setLearnEvalProgress(ctx, "evaluating session");
 				const result = await evaluateSessionLearning({
 					project,
 					sessionManager: ctx.sessionManager,
@@ -836,13 +886,14 @@ export function registerContinuousLearningCommands(
 					},
 				});
 
+				setLearnEvalProgress(ctx, "preparing result");
 				const target = buildLearnEvalTarget({
 					verdict: result.quality.verdict,
 					absorbTarget: result.quality.absorbTarget,
 					targetPath: result.targetPath,
 				});
 				const baseDetails: LearnEvalMessageDetails = {
-					projectLabel: currentProjectLabel(project),
+					projectLabel,
 					verdict: result.quality.verdict,
 					scope: result.quality.scope,
 					target,
@@ -858,9 +909,11 @@ export function registerContinuousLearningCommands(
 				};
 				const needsConfirmation = ctx.hasUI && !applyRequested && result.quality.verdict !== "drop";
 				if (needsConfirmation) {
+					setLearnEvalProgress(ctx, "awaiting confirmation");
 					emitLearnEvalReport(pi, {
 						...baseDetails,
 						awaitingConfirmation: true,
+						phase: "awaiting confirmation",
 					});
 				}
 
@@ -874,12 +927,16 @@ export function registerContinuousLearningCommands(
 							buildLearnEvalConfirmBody(baseDetails),
 						);
 						if (confirmed) {
+							setLearnEvalProgress(ctx, "applying result");
 							const applyResult = await applyLearnEvalResult(result);
 							applyStatus = applyResult.status;
 							applyMessage = applyResult.message;
 							applied = applyResult.status === "applied";
+						} else {
+							setLearnEvalProgress(ctx, "cancelled");
 						}
 					} else if (applyRequested) {
+						setLearnEvalProgress(ctx, "applying result");
 						const applyResult = await applyLearnEvalResult(result);
 						applyStatus = applyResult.status;
 						applyMessage = applyResult.message;
@@ -888,6 +945,8 @@ export function registerContinuousLearningCommands(
 				}
 
 				if (applied && ctx.hasUI) {
+					setLearnEvalProgress(ctx, "reloading resources");
+					ctx.ui.notify("learn-eval applied; reloading resources", "info");
 					await ctx.reload();
 				}
 				emitLearnEvalReport(pi, {
@@ -899,6 +958,8 @@ export function registerContinuousLearningCommands(
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
 				ctx.ui.notify(`learn-eval 失败: ${message}`, "error");
+			} finally {
+				setLearnEvalProgress(ctx, undefined);
 			}
 		},
 	});
